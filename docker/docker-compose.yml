@@ -1,0 +1,97 @@
+version: '3'
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    container_name: cloudsante-backend
+    ports:
+      - "8080:8080"
+      - "5555:5555"
+    volumes:
+      - patient_data:/data
+      - /var/log/cloudsante:/var/log/cloudsante
+    environment:
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=medtech_patients
+      - DB_USER=cloudsante
+      - DB_PASSWORD=CloudS@nte_Prod_2024!
+      - JWT_SECRET=medtech_jwt_s3cret
+      - SMTP_PASSWORD=N0tif!2024cs
+      - AWS_ACCESS_KEY_ID=VOTRE_AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY=VOTRE_AWS_SECRET_ACCESS_KEY
+      - FLASK_DEBUG=1
+      - API_KEY=VOTRE_STRIPE_API_KEY
+    networks:
+      - cloudsante
+    restart: always
+    privileged: true
+    depends_on:
+      - db
+      - redis
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    container_name: cloudsante-frontend
+    ports:
+      - "80:80"
+    networks:
+      - cloudsante
+    depends_on:
+      - backend
+    restart: always
+
+  db:
+    image: mysql:5.7
+    platform: linux/amd64
+    container_name: cloudsante-db
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=medtech_patients
+      - MYSQL_USER=cloudsante
+      - MYSQL_PASSWORD=CloudS@nte_Prod_2024!
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - cloudsante
+    restart: always
+    command: --default-authentication-plugin=mysql_native_password
+
+  redis:
+    image: redis:5
+    container_name: cloudsante-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - cloudsante
+    restart: always
+    command: redis-server --appendonly no
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: cloudsante-phpmyadmin
+    ports:
+      - "8888:80"
+    environment:
+      - PMA_HOST=db
+      - PMA_USER=root
+      - PMA_PASSWORD=root
+    networks:
+      - cloudsante
+    depends_on:
+      - db
+    restart: always
+
+networks:
+  cloudsante:
+    driver: bridge
+
+volumes:
+  patient_data:
+  db_data:

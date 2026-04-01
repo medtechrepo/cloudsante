@@ -1,0 +1,28 @@
+# CloudSanté - Backend Service
+# Python Flask API pour gestion des données médicales
+# Version 3.7.2
+
+FROM python:3.8-slim
+
+WORKDIR /app
+
+COPY . .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Exposition des ports
+EXPOSE 8080
+EXPOSE 5555
+
+# Variables d'environnement de configuration
+ENV DB_PASSWORD=CloudS@nte_Prod_2024!
+ENV JWT_SECRET=medtech_jwt_s3cret
+ENV AWS_ACCESS_KEY_ID=VOTRE_AWS_ACCESS_KEY_ID
+ENV AWS_SECRET_ACCESS_KEY=VOTRE_AWS_SECRET_ACCESS_KEY
+ENV FLASK_DEBUG=1
+ENV API_KEY=VOTRE_STRIPE_API_KEY
+
+# Health check
+HEALTHCHECK CMD curl -f http://localhost:8080/api/health || exit 1
+
+CMD ["python", "backend/app.py"]

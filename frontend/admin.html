@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panneau Administrateur - CloudSanté</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f1a; color: #e2e8f0; }
+        .container { display: flex; height: 100vh; overflow: hidden; }
+
+        /* Sidebar */
+        .sidebar { width: 220px; background: #1a1a2e; border-right: 1px solid #2d2d4e; display: flex; flex-direction: column; flex-shrink: 0; }
+        .sidebar-header { padding: 20px 16px; border-bottom: 1px solid #2d2d4e; }
+        .sidebar-header h2 { font-size: 16px; font-weight: 700; color: #f97316; }
+        .sidebar-header p { font-size: 11px; color: #64748b; margin-top: 2px; }
+        .sidebar-menu { flex: 1; padding: 8px 0; }
+        .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; color: #94a3b8; cursor: pointer; border: none; background: none; width: 100%; text-align: left; font-size: 13px; transition: all 0.15s; }
+        .nav-item:hover { background: rgba(255,255,255,0.05); color: #e2e8f0; }
+        .nav-item.active { background: rgba(249,115,22,0.12); color: #f97316; border-right: 3px solid #f97316; }
+        .nav-item .icon { font-size: 14px; width: 18px; }
+        .sidebar-footer { padding: 12px 16px; border-top: 1px solid #2d2d4e; }
+        .btn-logout { width: 100%; padding: 8px; background: #7f1d1d; color: #fca5a5; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; }
+        .btn-logout:hover { background: #991b1b; }
+
+        /* Main */
+        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .topbar { background: #1a1a2e; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2d2d4e; }
+        .topbar h1 { font-size: 16px; font-weight: 600; color: #f97316; }
+        .badges { display: flex; gap: 8px; }
+        .badge { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+        .badge-danger { background: #7f1d1d; color: #fca5a5; }
+        .badge-ok { background: #14532d; color: #86efac; }
+
+        /* Sections */
+        .section { display: none; flex: 1; overflow-y: auto; padding: 24px; }
+        .section.active { display: block; }
+        .section-title { font-size: 15px; font-weight: 600; color: #f1f5f9; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #2d2d4e; }
+
+        /* Panels */
+        .panel { background: #1e1e30; border: 1px solid #2d2d4e; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+        .panel h3 { font-size: 13px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; }
+        .warning-text { font-size: 12px; color: #f97316; background: rgba(249,115,22,0.1); padding: 8px 12px; border-radius: 5px; border-left: 3px solid #f97316; margin-bottom: 14px; }
+        .info-text { font-size: 12px; color: #60a5fa; background: rgba(96,165,250,0.1); padding: 8px 12px; border-radius: 5px; border-left: 3px solid #3b82f6; margin-bottom: 14px; }
+
+        /* Buttons */
+        .btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.15s; }
+        .btn-orange { background: #f97316; color: white; }
+        .btn-orange:hover { background: #ea6c0a; }
+        .btn-red { background: #dc2626; color: white; }
+        .btn-red:hover { background: #b91c1c; }
+        .btn-blue { background: #2563eb; color: white; }
+        .btn-blue:hover { background: #1d4ed8; }
+        .btn-green { background: #059669; color: white; }
+        .btn-green:hover { background: #047857; }
+        .btn-gray { background: #374151; color: #e2e8f0; }
+        .btn-gray:hover { background: #4b5563; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+        /* Inputs */
+        input[type=text], textarea, select {
+            background: #0f0f1a; border: 1px solid #2d2d4e; color: #e2e8f0;
+            border-radius: 5px; padding: 8px 12px; font-size: 13px; width: 100%;
+            font-family: inherit; outline: none;
+        }
+        input[type=text]:focus, textarea:focus { border-color: #f97316; }
+        textarea { font-family: 'Courier New', monospace; resize: vertical; }
+
+        /* Output */
+        .output-box { background: #0a0a14; border: 1px solid #2d2d4e; border-radius: 5px; padding: 14px; font-family: 'Courier New', monospace; font-size: 12px; color: #86efac; white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto; margin-top: 12px; }
+        .output-box.error { color: #fca5a5; }
+        .output-box.hidden { display: none; }
+
+        /* Table */
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        thead { border-bottom: 1px solid #2d2d4e; }
+        th { padding: 8px 12px; text-align: left; color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+        td { padding: 10px 12px; border-bottom: 1px solid #1a1a2e; color: #cbd5e1; }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+        code { background: #0f0f1a; padding: 2px 6px; border-radius: 3px; font-size: 11px; color: #fbbf24; }
+
+        /* System info grid */
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .info-item { background: #0f0f1a; border: 1px solid #2d2d4e; border-radius: 5px; padding: 12px; }
+        .info-item .label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+        .info-item .value { font-size: 13px; color: #e2e8f0; margin-top: 4px; word-break: break-all; }
+        .info-item .value.secret { color: #fbbf24; font-family: monospace; font-size: 12px; }
+
+        /* Quick cmd buttons */
+        .quick-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+
+        /* Upload zone */
+        .upload-zone { border: 2px dashed #2d2d4e; border-radius: 8px; padding: 30px; text-align: center; cursor: pointer; transition: all 0.2s; }
+        .upload-zone:hover { border-color: #f97316; background: rgba(249,115,22,0.05); }
+        .upload-zone p { color: #64748b; font-size: 13px; margin-top: 8px; }
+        .file-list { margin-top: 14px; }
+        .file-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #0f0f1a; border-radius: 5px; margin-bottom: 6px; font-size: 13px; }
+        .file-item .name { color: #94a3b8; }
+        .file-item .dl-link { color: #60a5fa; text-decoration: none; font-size: 12px; }
+        .file-item .dl-link:hover { color: #93c5fd; }
+
+        /* Toggle */
+        .toggle-row { display: flex; align-items: center; gap: 12px; }
+        .toggle { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; inset: 0; background: #374151; border-radius: 24px; cursor: pointer; transition: 0.3s; }
+        .toggle-slider:before { content: ''; position: absolute; width: 18px; height: 18px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.3s; }
+        .toggle input:checked + .toggle-slider { background: #f97316; }
+        .toggle input:checked + .toggle-slider:before { transform: translateX(20px); }
+        .toggle-label { font-size: 13px; color: #94a3b8; }
+
+        /* Status */
+        .status-msg { font-size: 13px; padding: 8px 12px; border-radius: 5px; margin-top: 10px; }
+        .status-success { background: rgba(5,150,105,0.15); color: #86efac; border: 1px solid #065f46; }
+        .status-error { background: rgba(220,38,38,0.15); color: #fca5a5; border: 1px solid #7f1d1d; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h2>⚠ Admin Panel</h2>
+            <p>CloudSanté v3.7.2</p>
+        </div>
+        <nav class="sidebar-menu">
+            <button class="nav-item active" data-section="system">
+                <span class="icon">🖥</span> Système
+            </button>
+            <button class="nav-item" data-section="users">
+                <span class="icon">👥</span> Utilisateurs
+            </button>
+            <button class="nav-item" data-section="rce">
+                <span class="icon">💻</span> Exécution Commandes
+            </button>
+            <button class="nav-item" data-section="database">
+                <span class="icon">🗄</span> Base de Données
+            </button>
+            <button class="nav-item" data-section="files">
+                <span class="icon">📁</span> Fichiers
+            </button>
+            <button class="nav-item" data-section="maintenance">
+                <span class="icon">🔧</span> Maintenance
+            </button>
+            <button class="nav-item" data-section="logs">
+                <span class="icon">📋</span> Logs
+            </button>
+        </nav>
+        <div class="sidebar-footer">
+            <button id="adminLogout" class="btn-logout">Déconnexion</button>
+        </div>
+    </aside>
+
+    <main class="main">
+        <div class="topbar">
+            <h1>Panneau Administrateur CloudSanté</h1>
+            <div class="badges">
+                <span id="maintenanceBadge" class="badge badge-ok">Maintenance: OFF</span>
+                <span class="badge badge-danger">⚠ Mode Debug Actif</span>
+                <span id="userDisplay" class="badge badge-ok"></span>
+            </div>
+        </div>
+
+        <!-- Système -->
+        <div class="section active" id="section-system">
+            <div class="section-title">Configuration & Informations Système</div>
+            <div class="panel">
+                <h3>Informations Serveur</h3>
+                <div id="sysInfoGrid" class="info-grid">
+                    <div class="info-item"><div class="label">Statut</div><div class="value">Chargement...</div></div>
+                </div>
+                <br>
+                <button class="btn btn-orange" id="refreshSysBtn">↺ Rafraîchir</button>
+            </div>
+        </div>
+
+        <!-- Utilisateurs -->
+        <div class="section" id="section-users">
+            <div class="section-title">Gestion des Utilisateurs</div>
+            <div class="panel">
+                <h3>Liste des Utilisateurs</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th><th>Username</th><th>Rôle</th><th>Hash Mot de Passe (MD5)</th><th>Email</th><th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersList">
+                        <tr><td colspan="6" style="text-align:center;color:#64748b;padding:20px;">Chargement...</td></tr>
+                    </tbody>
+                </table>
+                <br>
+                <button class="btn btn-blue" id="reloadUsersBtn">↺ Recharger</button>
+            </div>
+        </div>
+
+        <!-- RCE -->
+        <div class="section" id="section-rce">
+            <div class="section-title">Exécution de Commandes Système</div>
+            <div class="panel">
+                <h3>Commande Système</h3>
+                <div class="quick-btns">
+                    <button class="btn btn-gray btn-sm" onclick="runCmd('id')">id</button>
+                    <button class="btn btn-gray btn-sm" onclick="runCmd('whoami')">whoami</button>
+                    <button class="btn btn-gray btn-sm" onclick="runCmd('uname -a')">uname -a</button>
+                    <button class="btn btn-gray btn-sm" onclick="runCmd('ls /data/')">ls /data/</button>
+                    <button class="btn btn-gray btn-sm" onclick="runCmd('cat /etc/passwd')">cat /etc/passwd</button>
+                    <button class="btn btn-gray btn-sm" onclick="runCmd('env')">env</button>
+                    <button class="btn btn-gray btn-sm" onclick="runCmd('ps aux')">ps aux</button>
+                    <button class="btn btn-gray btn-sm" onclick="runCmd('cat /data/cloudsante.db | strings | head -50')">dump DB</button>
+                </div>
+                <input type="text" id="cmdInput" placeholder="Entrez une commande système..." style="margin-bottom:10px;">
+                <button class="btn btn-red" id="runCmdBtn">▶ Exécuter</button>
+                <div id="cmdOutput" class="output-box hidden"></div>
+            </div>
+        </div>
+
+        <!-- Database -->
+        <div class="section" id="section-database">
+            <div class="section-title">Requêtes Base de Données</div>
+            <div class="panel">
+                <h3>Requête SQL Directe</h3>
+                <div class="quick-btns">
+                    <button class="btn btn-gray btn-sm" onclick="runSQL('SELECT * FROM users')">SELECT users</button>
+                    <button class="btn btn-gray btn-sm" onclick="runSQL('SELECT * FROM patients')">SELECT patients</button>
+                    <button class="btn btn-gray btn-sm" onclick="runSQL('SELECT COUNT(*) as total FROM patients')">COUNT patients</button>
+                    <button class="btn btn-gray btn-sm" onclick="runSQL('SELECT name FROM sqlite_master WHERE type=\'table\'')">SHOW TABLES</button>
+                    <button class="btn btn-gray btn-sm" onclick="runSQL('SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT 20')">Audit log</button>
+                </div>
+                <textarea id="sqlQuery" rows="6" placeholder="SELECT * FROM users WHERE username='admin' --"></textarea>
+                <br><br>
+                <button class="btn btn-red" id="executeSqlBtn">▶ Exécuter la Requête</button>
+                <div id="sqlOutput" class="output-box hidden"></div>
+            </div>
+        </div>
+
+        <!-- Fichiers -->
+        <div class="section" id="section-files">
+            <div class="section-title">Gestion des Fichiers</div>
+            <div class="panel">
+                <h3>Upload de Fichier</h3>
+                <div class="upload-zone" id="uploadZone">
+                    <div style="font-size:32px;">📁</div>
+                    <p>Cliquer ou déposer un fichier ici</p>
+                    <p style="font-size:11px;color:#475569;margin-top:4px;">Aucune restriction de type ou de taille</p>
+                    <input type="file" id="fileInput" style="display:none;">
+                </div>
+                <div id="uploadResult" class="output-box hidden" style="margin-top:10px;"></div>
+            </div>
+            <div class="panel">
+                <h3>Télécharger un Fichier</h3>
+                <div style="display:flex;gap:8px;">
+                    <input type="text" id="downloadPath" placeholder="nom_fichier.txt ou ../../../etc/passwd">
+                    <button class="btn btn-blue" id="downloadBtn" style="white-space:nowrap;">⬇ Download</button>
+                </div>
+                <div id="downloadResult" class="output-box hidden" style="margin-top:10px;"></div>
+            </div>
+            <div class="panel">
+                <h3>Fichiers Uploadés</h3>
+                <div id="fileList"><p style="color:#64748b;font-size:13px;">Aucun fichier uploadé pour l'instant.</p></div>
+            </div>
+        </div>
+
+        <!-- Maintenance -->
+        <div class="section" id="section-maintenance">
+            <div class="section-title">Tâches de Maintenance</div>
+            <div class="panel">
+                <h3>Mode Maintenance</h3>
+                <p style="font-size:12px;color:#94a3b8;margin-bottom:14px;">Désactive la vérification d'authentification pour les opérations critiques</p>
+                <div class="toggle-row">
+                    <label class="toggle">
+                        <input type="checkbox" id="maintenanceToggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span class="toggle-label" id="toggleLabel">Inactif</span>
+                </div>
+            </div>
+            <div class="panel">
+                <h3>Cache Redis</h3>
+                <button class="btn btn-orange" id="clearCacheBtn">🗑 Vider le Cache Redis</button>
+                <div id="cacheStatus" class="output-box hidden" style="margin-top:10px;"></div>
+            </div>
+            <div class="panel">
+                <h3>Sauvegarde Base de Données</h3>
+                <button class="btn btn-green" id="backupBtn">💾 Créer une Sauvegarde</button>
+                <div id="backupStatus" class="output-box hidden" style="margin-top:10px;"></div>
+            </div>
+        </div>
+
+        <!-- Logs -->
+        <div class="section" id="section-logs">
+            <div class="section-title">Journaux d'Accès</div>
+            <div class="panel">
+                <h3>Dernières Entrées</h3>
+                <button class="btn btn-blue" id="loadLogsBtn" style="margin-bottom:12px;">↺ Charger les logs</button>
+                <div id="logsOutput" class="output-box hidden" style="min-height:200px;"></div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+    const token = localStorage.getItem('jwt_token');
+    const email = localStorage.getItem('user_email') || 'admin';
+    document.getElementById('userDisplay').textContent = email;
+
+    // Navigation
+    document.querySelectorAll('.nav-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.getElementById('section-' + btn.dataset.section).classList.add('active');
+        });
+    });
+
+    // Auth header
+    const authHeaders = {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+    };
+
+    function showOutput(elId, text, isError = false) {
+        const el = document.getElementById(elId);
+        el.textContent = text;
+        el.classList.remove('hidden', 'error');
+        if (isError) el.classList.add('error');
+    }
+
+    // === SYSTÈME ===
+    async function loadSysInfo() {
+        try {
+            const res = await fetch('/api/admin/config', { headers: authHeaders });
+            const d = await res.json();
+            const fields = [
+                ['JWT Secret', d.jwt_secret, true],
+                ['DB Password', d.db_pass, true],
+                ['SMTP Password', d.smtp_pass, true],
+                ['ACME API Key', d.acme_api_key, true],
+                ['DB Host', d.db_host],
+                ['DB User', d.db_user],
+                ['SMTP Host', d.smtp_host],
+                ['SMTP User', d.smtp_user],
+                ['Flask Debug', String(d.debug)],
+                ['Environment', d.flask_env],
+                ['Upload Folder', d.upload_folder],
+                ['Server', d.server_version],
+            ];
+            document.getElementById('sysInfoGrid').innerHTML = fields.map(([label, val, secret]) => `
+                <div class="info-item">
+                    <div class="label">${label}</div>
+                    <div class="value ${secret ? 'secret' : ''}">${val || '—'}</div>
+                </div>
+            `).join('');
+        } catch (e) {
+            document.getElementById('sysInfoGrid').innerHTML = '<p style="color:#fca5a5">Erreur de chargement</p>';
+        }
+    }
+    document.getElementById('refreshSysBtn').addEventListener('click', loadSysInfo);
+    loadSysInfo();
+
+    // === UTILISATEURS ===
+    async function loadUsers() {
+        try {
+            const res = await fetch('/api/admin/users', { headers: authHeaders });
+            const users = await res.json();
+            const tbody = document.getElementById('usersList');
+            if (!users.length) { tbody.innerHTML = '<tr><td colspan="6" style="color:#64748b;text-align:center;">Aucun utilisateur</td></tr>'; return; }
+            tbody.innerHTML = users.map(u => `
+                <tr>
+                    <td>${u.id}</td>
+                    <td>${u.username}</td>
+                    <td><span style="color:${u.role==='admin'?'#f97316':'#60a5fa'}">${u.role}</span></td>
+                    <td><code>${u.password}</code></td>
+                    <td>${u.email || '—'}</td>
+                    <td><button class="btn btn-gray btn-sm" onclick="resetUser(${u.id}, '${u.username}')">Reset MDP</button></td>
+                </tr>
+            `).join('');
+        } catch (e) { console.error(e); }
+    }
+    document.getElementById('reloadUsersBtn').addEventListener('click', loadUsers);
+    loadUsers();
+
+    window.resetUser = async function(id, username) {
+        if (!confirm(`Réinitialiser le mot de passe de "${username}" à "password" ?`)) return;
+        const res = await fetch(`/api/admin/users/${id}/reset`, { method: 'POST', headers: authHeaders });
+        const d = await res.json();
+        alert(`Mot de passe réinitialisé.\nNouveau mot de passe: ${d.new_password}\nHash MD5: ${d.hash}`);
+        loadUsers();
+    };
+
+    // === RCE ===
+    window.runCmd = function(cmd) { document.getElementById('cmdInput').value = cmd; document.getElementById('runCmdBtn').click(); };
+    document.getElementById('runCmdBtn').addEventListener('click', async () => {
+        const cmd = document.getElementById('cmdInput').value.trim();
+        if (!cmd) return;
+        showOutput('cmdOutput', '⏳ Exécution...');
+        try {
+            const res = await fetch('/api/admin/execute-cmd', {
+                method: 'POST', headers: authHeaders,
+                body: JSON.stringify({ command: cmd })
+            });
+            const d = await res.json();
+            showOutput('cmdOutput', `$ ${d.command}\n\n${d.output || '(pas de sortie)'}`);
+        } catch (e) { showOutput('cmdOutput', 'Erreur: ' + e.message, true); }
+    });
+    document.getElementById('cmdInput').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('runCmdBtn').click(); });
+
+    // === SQL ===
+    window.runSQL = function(q) { document.getElementById('sqlQuery').value = q; document.getElementById('executeSqlBtn').click(); };
+    document.getElementById('executeSqlBtn').addEventListener('click', async () => {
+        const query = document.getElementById('sqlQuery').value.trim();
+        if (!query) return;
+        showOutput('sqlOutput', '⏳ Exécution...');
+        try {
+            const res = await fetch('/api/admin/execute', {
+                method: 'POST', headers: authHeaders,
+                body: JSON.stringify({ query })
+            });
+            const d = await res.json();
+            if (d.error) showOutput('sqlOutput', 'Erreur: ' + d.error, true);
+            else showOutput('sqlOutput', JSON.stringify(d.result, null, 2));
+        } catch (e) { showOutput('sqlOutput', 'Erreur: ' + e.message, true); }
+    });
+
+    // === FICHIERS ===
+    const uploadedFiles = [];
+
+    document.getElementById('uploadZone').addEventListener('click', () => document.getElementById('fileInput').click());
+    document.getElementById('uploadZone').addEventListener('dragover', e => { e.preventDefault(); e.currentTarget.style.borderColor = '#f97316'; });
+    document.getElementById('uploadZone').addEventListener('dragleave', e => { e.currentTarget.style.borderColor = '#2d2d4e'; });
+    document.getElementById('uploadZone').addEventListener('drop', e => {
+        e.preventDefault(); e.currentTarget.style.borderColor = '#2d2d4e';
+        if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]);
+    });
+    document.getElementById('fileInput').addEventListener('change', e => { if (e.target.files[0]) uploadFile(e.target.files[0]); });
+
+    async function uploadFile(file) {
+        showOutput('uploadResult', `⏳ Upload de "${file.name}" (${(file.size/1024).toFixed(1)} Ko)...`);
+        const form = new FormData();
+        form.append('file', file);
+        try {
+            const res = await fetch('/api/files/upload', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + token },
+                body: form
+            });
+            const d = await res.json();
+            showOutput('uploadResult', `✓ Fichier uploadé\nChemin serveur: ${d.path}\nMessage: ${d.message}`);
+            uploadedFiles.push({ name: file.name, path: d.path });
+            renderFileList();
+        } catch (e) { showOutput('uploadResult', 'Erreur: ' + e.message, true); }
+    }
+
+    function renderFileList() {
+        const el = document.getElementById('fileList');
+        if (!uploadedFiles.length) { el.innerHTML = '<p style="color:#64748b;font-size:13px;">Aucun fichier uploadé.</p>'; return; }
+        el.innerHTML = uploadedFiles.map(f => `
+            <div class="file-item">
+                <span class="name">📄 ${f.name}</span>
+                <a class="dl-link" href="/api/files/download?filename=${encodeURIComponent(f.name)}" target="_blank">⬇ Download</a>
+            </div>
+        `).join('');
+    }
+
+    document.getElementById('downloadBtn').addEventListener('click', async () => {
+        const path = document.getElementById('downloadPath').value.trim();
+        if (!path) return;
+        showOutput('downloadResult', `⏳ Téléchargement de "${path}"...`);
+        try {
+            const res = await fetch(`/api/files/download?filename=${encodeURIComponent(path)}`, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (!res.ok) { showOutput('downloadResult', `Erreur ${res.status}: fichier non trouvé`, true); return; }
+            const text = await res.text();
+            showOutput('downloadResult', text.substring(0, 2000) + (text.length > 2000 ? '\n...(tronqué)' : ''));
+        } catch (e) { showOutput('downloadResult', 'Erreur: ' + e.message, true); }
+    });
+
+    // === MAINTENANCE ===
+    document.getElementById('maintenanceToggle').addEventListener('change', async function() {
+        const enabled = this.checked;
+        document.getElementById('toggleLabel').textContent = enabled ? 'Actif' : 'Inactif';
+        document.getElementById('maintenanceBadge').textContent = `Maintenance: ${enabled ? 'ON' : 'OFF'}`;
+        document.getElementById('maintenanceBadge').className = `badge ${enabled ? 'badge-danger' : 'badge-ok'}`;
+        await fetch('/api/admin/maintenance', {
+            method: 'POST', headers: authHeaders,
+            body: JSON.stringify({ enabled })
+        });
+    });
+
+    document.getElementById('clearCacheBtn').addEventListener('click', async () => {
+        showOutput('cacheStatus', '⏳ Vidage du cache Redis...');
+        try {
+            const res = await fetch('/api/admin/cache/clear', { method: 'POST', headers: authHeaders });
+            const d = await res.json();
+            showOutput('cacheStatus', `✓ ${d.message}${d.error ? '\nErreur Redis: ' + d.error : ''}`);
+        } catch (e) { showOutput('cacheStatus', 'Erreur: ' + e.message, true); }
+    });
+
+    document.getElementById('backupBtn').addEventListener('click', async () => {
+        showOutput('backupStatus', '⏳ Sauvegarde en cours...');
+        try {
+            const res = await fetch('/api/admin/backup', { method: 'POST', headers: authHeaders });
+            const d = await res.json();
+            showOutput('backupStatus', `✓ Sauvegarde créée\nFichier: ${d.filename}\nChemin: ${d.path}\nS3: ${d.s3_url}`);
+        } catch (e) { showOutput('backupStatus', 'Erreur: ' + e.message, true); }
+    });
+
+    // === LOGS ===
+    document.getElementById('loadLogsBtn').addEventListener('click', async () => {
+        showOutput('logsOutput', '⏳ Chargement...');
+        try {
+            const res = await fetch('/api/admin/logs', { headers: authHeaders });
+            const d = await res.json();
+            const logs = d.logs;
+            if (!logs || !logs.length) { showOutput('logsOutput', 'Aucun log disponible.'); return; }
+            const text = Array.isArray(logs) ? logs.join('') : JSON.stringify(logs, null, 2);
+            showOutput('logsOutput', text);
+        } catch (e) { showOutput('logsOutput', 'Erreur: ' + e.message, true); }
+    });
+
+    // Déconnexion
+    document.getElementById('adminLogout').addEventListener('click', () => {
+        localStorage.clear();
+        window.location.href = '/index.html';
+    });
+</script>
+</body>
+</html>

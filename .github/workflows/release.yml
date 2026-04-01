@@ -1,0 +1,66 @@
+name: Build & Release Docker Images
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_BACKEND: ghcr.io/${{ github.repository_owner }}/cloudsante-backend
+  IMAGE_FRONTEND: ghcr.io/${{ github.repository_owner }}/cloudsante-frontend
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract tag version
+        id: meta
+        run: echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.backend
+          push: true
+          tags: |
+            ${{ env.IMAGE_BACKEND }}:${{ steps.meta.outputs.version }}
+            ${{ env.IMAGE_BACKEND }}:latest
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.frontend
+          push: true
+          tags: |
+            ${{ env.IMAGE_FRONTEND }}:${{ steps.meta.outputs.version }}
+            ${{ env.IMAGE_FRONTEND }}:latest
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.version }}
+          name: Release ${{ steps.meta.outputs.version }}
+          body: |
+            ## Images Docker
+
+            ```
+            docker pull ${{ env.IMAGE_BACKEND }}:${{ steps.meta.outputs.version }}
+            docker pull ${{ env.IMAGE_FRONTEND }}:${{ steps.meta.outputs.version }}
+            ```

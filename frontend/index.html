@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CloudSanté - Portail de Connexion</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- CloudSanté Platform v3.7.2 | Serveur: prod-medtech-01.aws.cloudsante.fr -->
+</head>
+<body class="login-page">
+    <div class="login-container">
+        <div class="login-box">
+            <div class="brand-header">
+                <svg class="logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="50" cy="50" r="45" fill="#0066CC" opacity="0.1"/>
+                    <path d="M50 20 L60 40 L50 50 L40 40 Z" fill="#0066CC"/>
+                    <path d="M50 50 L65 60 L55 75 L40 65 Z" fill="#0066CC" opacity="0.7"/>
+                </svg>
+                <h1>CloudSanté</h1>
+                <p class="subtitle">Plateforme de gestion des patients</p>
+            </div>
+
+            <form id="loginForm" method="GET" action="/api/login">
+                <div class="form-group">
+                    <label for="email">Email professionnel</label>
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        placeholder="docteur@hopital.fr"
+                        required
+                        autocomplete="email"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Mot de passe</label>
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        placeholder="••••••••"
+                        required
+                        autocomplete="current-password"
+                    >
+                </div>
+
+                <div class="form-group checkbox">
+                    <input type="checkbox" id="remember" name="remember">
+                    <label for="remember">Se souvenir de moi</label>
+                </div>
+
+                <button type="submit" class="btn-login">Connexion</button>
+            </form>
+
+            <div class="login-footer">
+                <a href="#forgot-password" class="link-secondary">Mot de passe oublié?</a>
+                <span class="separator">|</span>
+                <a href="#support" class="link-secondary">Support</a>
+            </div>
+
+            <div class="security-notice">
+                <p><strong>Authentification sécurisée par JWT</strong></p>
+                <p class="small">Tous vos accès sont enregistrés et conformes RGPD</p>
+            </div>
+        </div>
+
+        <div class="login-sidebar">
+            <div class="feature">
+                <div class="feature-icon">🔒</div>
+                <h3>Sécurité des données</h3>
+                <p>Conformité HIPAA et RGPD</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">☁️</div>
+                <h3>Infrastructure Cloud</h3>
+                <p>Déploiement hautement disponible</p>
+            </div>
+            <div class="feature">
+                <div class="feature-icon">📱</div>
+                <h3>Accès Mobile</h3>
+                <p>Interface responsive 24/7</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Gestion du formulaire de connexion
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const remember = document.getElementById('remember').checked;
+
+            fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: email, password: password })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.token) {
+                        localStorage.setItem('jwt_token', data.token);
+                        localStorage.setItem('user_email', email);
+                        localStorage.setItem('user_role', data.user && data.user.role || 'user');
+
+                        if (remember) {
+                            localStorage.setItem('user_credentials', btoa(email + ':' + password));
+                        }
+
+                        window.location.href = '/dashboard.html';
+                    } else {
+                        alert('Erreur de connexion: ' + (data.error || 'Identifiants incorrects'));
+                    }
+                })
+                .catch(error => console.error('Erreur de connexion:', error));
+        });
+
+        // Fonction debug - saisir 'admin' dans la console pour accéder au panneau administrateur
+        window.adminDebugMode = false;
+
+        const originalLog = console.log;
+        const commandBuffer = [];
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Control' && e.altKey && e.shiftKey) {
+                window.adminDebugMode = !window.adminDebugMode;
+                console.log('Mode debug: ' + (window.adminDebugMode ? 'ACTIVÉ' : 'DÉSACTIVÉ'));
+                if (window.adminDebugMode) {
+                    console.log('%c>> Admin Panel accessible <<', 'color: red; font-weight: bold;');
+                    console.log('Type: adminPanel.login("username", "password") to access admin features');
+                }
+            }
+        });
+
+        window.adminPanel = {
+            login: function(user, pass) {
+                if (window.adminDebugMode) {
+                    localStorage.setItem('admin_token', btoa(user + ':' + pass));
+                    localStorage.setItem('admin_mode', 'true');
+                    window.location.href = '/admin.html';
+                }
+            },
+            config: function() {
+                if (window.adminDebugMode) {
+                    console.log({
+                        api_url: '',
+                        db_host: 'db:3306',
+                        db_user: 'cloudsante',
+                        jwt_secret: 'medtech_jwt_s3cret'
+                    });
+                }
+            }
+        };
+    </script>
+</body>
+</html>
