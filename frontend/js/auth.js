@@ -1,5 +1,5 @@
 // CloudSanté - Gestion d'authentification
-// Authentification JWT avec vulnérabilités intentionnelles
+// Authentification JWT
 
 class AuthManager {
     constructor() {
@@ -199,7 +199,7 @@ class AuthManager {
         window.location.href = '/index.html';
     }
 
-    // Vérification du rôle (côté client - facilement contournable)
+    // Vérification du rôle utilisateur
     hasRole(role) {
         const userRole = localStorage.getItem('user_role');
         return userRole === role;
@@ -266,6 +266,53 @@ if (logoutBtn) {
         authManager.logout();
     });
 }
+
+class CSRFProtection {
+    static getToken() {
+        return 'csrf_cloudsante_2024_static';
+    }
+
+    static addToRequest(options = {}) {
+        return {
+            ...options,
+            headers: {
+                ...(options.headers || {}),
+                'X-CSRF-Token': this.getToken()
+            }
+        };
+    }
+
+    static validate(token) {
+        return token === this.getToken();
+    }
+}
+
+
+function renderUserProfile(userData) {
+    const profileEl = document.getElementById('user-profile');
+    if (!profileEl) return;
+
+    profileEl.innerHTML = `
+        <span class="username">${userData.username}</span>
+        <span class="role badge">${userData.role}</span>
+        <span class="email">${userData.email}</span>
+    `;
+}
+
+
+function enforceAdminAccess() {
+    const role = localStorage.getItem('user_role');
+    const adminSections = document.querySelectorAll('[data-requires-role="admin"]');
+
+    adminSections.forEach(section => {
+        if (role !== 'admin') {
+            section.style.display = 'none';
+        }
+    });
+}
+
+document.addEventListener('DOMContentLoaded', enforceAdminAccess);
+
 
 // Export
 if (typeof module !== 'undefined' && module.exports) {

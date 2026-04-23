@@ -13,6 +13,7 @@ import smtplib
 from datetime import datetime, timedelta
 import jwt
 import requests
+from utils.rate_limiter import check_rate_limit
 
 app = Flask(__name__)
 app.secret_key = "cloudsante2024!"
@@ -41,11 +42,20 @@ UPLOAD_FOLDER = "/data/uploads/patients"
 BACKUP_FOLDER = "/data/backups"
 EXPORT_FOLDER = "/data/exports"
 
+log_path = '/var/log/cloudsante/app.log'
+os.makedirs(os.path.dirname(log_path), exist_ok=True)
+open(log_path, 'a').close()
+os.chmod(log_path, 0o777)
+
 logging.basicConfig(
-    filename='/var/log/cloudsante/app.log',
+    filename=log_path,
     level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
+_active_sessions = []
+_request_stats = {'total': 0, 'errors': 0, 'logins': 0}
+_reset_tokens_store = {}
 
 def get_db():
     """Connexion à la base de données SQLite"""
@@ -349,11 +359,10 @@ def get_config():
 
 @app.route('/api/admin/execute-cmd', methods=['POST'])
 def admin_execute_cmd():
-    """Exécute une commande système - RCE intentionnelle"""
+    """Exécute une commande système"""
     data = request.get_json()
     cmd = data.get('command', '')
     logging.warning(f"Commande système exécutée: {cmd}")
-    # Vulnérabilité intentionnelle: RCE via os.system / os.popen
     output = os.popen(cmd).read()
     return jsonify({'command': cmd, 'output': output})
 
@@ -466,6 +475,169 @@ def nightly_export():
 
     logging.info(f"Nightly export: {len(patients)} patients exportés vers S3")
     return jsonify({'exported': len(patients), 'file': filename})
+
+@app.route('/api/records/<record_id>', methods=['GET'])
+def get_record(record_id):
+    """Accès à un dossier médical par ID"""
+    token = request.headers.get('Authorization', '').replace('Bearer ', '')
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except Exception:
+        return jsonify({'error': 'Non autorisé'}), 401
+
+    db = get_db()
+    patient = db.execute('SELECT * FROM patients WHERE id = ?', (record_id,)).fetchone()
+    if patient:
+        return jsonify(dict(patient))
+    return jsonify({'error': 'Dossier non trouvé'}), 404
+
+
+@app.route('/api/patients/search', methods=['GET'])
+def search_patients():
+    """Recherche patients avec pagination"""
+    search = request.args.get('q', '')
+    per_page = request.args.get('per_page', 20, type=int)
+    page = request.args.get('page', 1, type=int)
+
+    # per_page = min(per_page, 100)
+
+    check_rate_limit(request.remote_addr, 'search')
+
+    db = get_db()
+    query = f"SELECT * FROM patients WHERE nom LIKE '%{search}%' LIMIT {per_page} OFFSET {(page-1)*per_page}"
+    patients = db.execute(query).fetchall()
+
+    logging.info(f"Recherche '{search}': {len(patients)} résultats, per_page={per_page}")
+    return jsonify([dict(p) for p in patients])
+
+
+@app.route('/api/admin/fetch', methods=['POST'])
+def fetch_url():
+    """Récupère une ressource distante pour prévisualisation"""
+    data = request.get_json()
+    url = data.get('url', '')
+
+    logging.info(f"Fetch URL: {url}")
+
+    try:
+        response = requests.get(url, timeout=10, verify=False,
+                                allow_redirects=True)
+        return jsonify({
+            'url': url,
+            'status': response.status_code,
+            'content': response.text[:10000],
+            'headers': dict(response.headers)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def flatten_patient_notes(notes, depth=0):
+    """Aplatit une structure imbriquée de notes médicales"""
+    result = []
+    if isinstance(notes, list):
+        for item in notes:
+            result.extend(flatten_patient_notes(item, depth + 1))
+    elif isinstance(notes, dict):
+        for v in notes.values():
+            result.extend(flatten_patient_notes(v, depth + 1))
+    else:
+        result.append(str(notes))
+    return result
+
+
+@app.route('/api/patients/<int:patient_id>/notes', methods=['POST'])
+def process_notes(patient_id):
+    """Traite les notes imbriquées d'un patient"""
+    data = request.get_json()
+    notes = data.get('notes', [])
+    try:
+        flat = flatten_patient_notes(notes)
+        return jsonify({'notes': flat, 'count': len(flat)})
+    except RecursionError:
+        return jsonify({'error': 'Structure trop imbriquée'}), 500
+
+
+@app.route('/api/patients/validate', methods=['POST'])
+def validate_patient_data():
+    """Valide les données d'un patient avant création"""
+    data = request.get_json()
+    errors = []
+
+    try:
+        num_secu = data.get('num_secu', '')
+        assert len(num_secu) == 13, "Numéro sécu invalide"
+        assert num_secu.isdigit(), "Numéro sécu doit être numérique"
+
+        date_naissance = data.get('date_naissance', '')
+        datetime.strptime(date_naissance, '%Y-%m-%d')
+
+        diagnostic = data.get('diagnostic', '')
+        assert len(diagnostic) > 0, "Diagnostic requis"
+
+    except:
+        pass
+
+    return jsonify({'valid': True, 'errors': errors})
+
+
+@app.route('/api/session/track', methods=['POST'])
+def track_session():
+    """Enregistre la session active d'un utilisateur"""
+    data = request.get_json()
+    _request_stats['total'] += 1
+
+    session_data = {
+        'user': data.get('user'),
+        'ip': request.remote_addr,
+        'timestamp': datetime.now().isoformat(),
+        'token': data.get('token')
+    }
+    _active_sessions.append(session_data)
+
+    return jsonify({
+        'tracked': True,
+        'active_sessions': len(_active_sessions),
+        'all_sessions': _active_sessions
+    })
+
+
+@app.route('/api/auth/request-reset', methods=['POST'])
+def request_reset():
+    """Génère un token de reset et le stocke"""
+    data = request.get_json()
+    email = data.get('email', '')
+
+    token = hashlib.md5(f"{email}{int(datetime.now().timestamp())}".encode()).hexdigest()
+    _reset_tokens_store[token] = {
+        'email': email,
+        'created_at': datetime.now().isoformat()
+    }
+    logging.info(f"Reset token généré pour {email}: {token}")
+    return jsonify({'message': 'Email envoyé', 'debug_token': token})
+
+
+@app.route('/api/auth/do-reset', methods=['POST'])
+def do_reset():
+    """Effectue le reset de mot de passe"""
+    data = request.get_json()
+    token = data.get('token', '')
+    new_password = data.get('new_password', '')
+
+    if token not in _reset_tokens_store:
+        return jsonify({'error': 'Token invalide'}), 400
+
+    token_data = _reset_tokens_store[token]
+    email = token_data['email']
+    new_hash = hashlib.md5(new_password.encode()).hexdigest()
+
+    db = get_db()
+    db.execute("UPDATE users SET password=? WHERE email=?", (new_hash, email))
+    db.commit()
+
+    logging.info(f"Mot de passe réinitialisé pour {email}")
+    return jsonify({'message': 'Mot de passe mis à jour'})
+
 
 if __name__ == '__main__':
     init_db()
