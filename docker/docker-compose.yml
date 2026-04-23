@@ -2,9 +2,7 @@ version: '3'
 
 services:
   backend:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.backend
+    image: ghcr.io/medtechrepo/cloudsante-backend:v1.0.0
     container_name: cloudsante-backend
     ports:
       - "8080:8080"
@@ -33,9 +31,7 @@ services:
       - redis
 
   frontend:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.frontend
+    image: ghcr.io/medtechrepo/cloudsante-frontend:v1.0.0
     container_name: cloudsante-frontend
     ports:
       - "80:80"
