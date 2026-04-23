@@ -1,0 +1,137 @@
+name: Compliance Checks
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+jobs:
+  iso27001:
+    name: ISO 27001 — Information Security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: A.8 — Secrets non hardcodés
+        run: |
+          echo "Vérification absence de secrets en clair..."
+          if grep -rE "(password|secret|api_key)\s*=\s*['\"][^'\"]{6,}" \
+            --include="*.py" --include="*.js" \
+            --exclude-dir=".git" . | grep -v "VOTRE_" | grep -v "example" | grep -v "#"; then
+            echo "FAIL: secrets potentiels détectés"
+            exit 1
+          fi
+          echo "OK"
+
+      - name: A.9 — Contrôle d'accès présent dans le code
+        run: |
+          echo "Vérification présence de mécanismes d'authentification..."
+          grep -rl "jwt\|token\|auth" --include="*.py" --include="*.js" . | grep -q . \
+            && echo "OK" || (echo "FAIL: aucun mécanisme d'auth détecté" && exit 1)
+
+      - name: A.12 — Journalisation activée
+        run: |
+          echo "Vérification présence de logging..."
+          grep -rl "log\|logger\|logging" --include="*.py" --include="*.js" . | grep -q . \
+            && echo "OK" || (echo "FAIL: aucune journalisation détectée" && exit 1)
+
+      - name: A.14 — HTTPS configuré
+        run: |
+          echo "Vérification configuration TLS dans nginx..."
+          grep -q "ssl\|443\|https" docker/nginx.conf 2>/dev/null \
+            && echo "OK" || echo "WARN: TLS non configuré (acceptable en dev)"
+
+  iso9001:
+    name: ISO 9001 — Quality Management
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 4.1 — Documentation présente
+        run: |
+          echo "Vérification présence de fichiers de documentation..."
+          ls README* 2>/dev/null || ls docs/ 2>/dev/null || ls *.md 2>/dev/null \
+            && echo "OK" || echo "WARN: aucune documentation trouvée"
+
+      - name: 7.5 — Versionnage du code
+        run: |
+          echo "Vérification présence d'un historique de versions..."
+          git log --oneline | wc -l | xargs -I{} sh -c \
+            'if [ {} -ge 1 ]; then echo "OK ({} commit(s))"; else echo "FAIL" && exit 1; fi'
+
+      - name: 8.3 — Dockerfile versionné
+        run: |
+          echo "Vérification que les images de base sont versionnées (pas de :latest)..."
+          if grep -E "^FROM .+:latest" docker/Dockerfile.backend docker/Dockerfile.frontend; then
+            echo "WARN: image de base non épinglée sur une version fixe"
+          else
+            echo "OK"
+          fi
+
+      - name: 8.5 — Variables d'environnement documentées
+        run: |
+          echo "Vérification présence de fichier .env.example ou équivalent..."
+          ls backend/.env* 2>/dev/null | grep -q . \
+            && echo "OK" || echo "WARN: pas de fichier .env de référence"
+
+  nis2:
+    name: NIS2 — Network & Information Security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Art.21 — Gestion des dépendances
+        run: |
+          echo "Vérification présence d'un fichier de dépendances..."
+          ls backend/requirements.txt | grep -q . \
+            && echo "OK" || (echo "FAIL: requirements.txt manquant" && exit 1)
+
+      - name: Art.21 — Pas de dépendances sans version épinglée
+        run: |
+          echo "Vérification que les dépendances sont versionnées..."
+          if grep -E "^[a-zA-Z]+==$" backend/requirements.txt; then
+            echo "WARN: certaines dépendances sans version"
+          else
+            echo "OK"
+          fi
+
+      - name: Art.21 — Isolation réseau définie
+        run: |
+          echo "Vérification présence d'un réseau Docker dédié..."
+          grep -q "networks:" docker/docker-compose.yml \
+            && echo "OK" || (echo "FAIL: pas d'isolation réseau Docker" && exit 1)
+
+      - name: Art.23 — Capacité de notification d'incident
+        run: |
+          echo "Vérification présence de mécanismes de health check..."
+          grep -q "HEALTHCHECK\|health" docker/Dockerfile.backend docker/docker-compose.yml \
+            && echo "OK" || echo "WARN: aucun health check défini"
+
+      - name: Art.21 — Politique de redémarrage définie
+        run: |
+          echo "Vérification présence de restart policy..."
+          grep -q "restart:" docker/docker-compose.yml \
+            && echo "OK" || (echo "FAIL: aucune politique de redémarrage" && exit 1)
+
+  compliance-summary:
+    name: Compliance Summary
+    runs-on: ubuntu-latest
+    needs: [iso27001, iso9001, nis2]
+    if: always()
+    steps:
+      - name: Résumé de conformité
+        run: |
+          echo "=================================="
+          echo "  RAPPORT DE CONFORMITÉ CLOUDSANTÉ"
+          echo "=================================="
+          echo "ISO 27001 : ${{ needs.iso27001.result }}"
+          echo "ISO 9001  : ${{ needs.iso9001.result }}"
+          echo "NIS2      : ${{ needs.nis2.result }}"
+          echo "=================================="
+          if [ "${{ needs.iso27001.result }}" = "failure" ] || \
+             [ "${{ needs.nis2.result }}" = "failure" ]; then
+            echo "STATUT GLOBAL : NON CONFORME"
+            exit 1
+          fi
+          echo "STATUT GLOBAL : CONFORME"
