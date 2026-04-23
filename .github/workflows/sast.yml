@@ -1,0 +1,108 @@
+name: SAST Analysis
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+jobs:
+  bandit:
+    name: Bandit — Python Security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Bandit
+        run: pip install bandit
+
+      - name: Run Bandit
+        run: |
+          bandit -r backend/ -f json -o bandit-report.json || true
+          bandit -r backend/ || true
+
+      - name: Upload Bandit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: bandit-report.json
+
+  eslint:
+    name: ESLint — JavaScript Security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install ESLint
+        run: npm install --save-dev eslint@8 eslint-plugin-security
+
+      - name: Create ESLint config
+        run: |
+          cat > .eslintrc.json << 'EOF'
+          {
+            "env": { "browser": true, "es2021": true },
+            "plugins": ["security"],
+            "extends": ["plugin:security/recommended"],
+            "rules": {
+              "no-eval": "warn",
+              "no-implied-eval": "warn"
+            }
+          }
+          EOF
+
+      - name: Run ESLint
+        run: |
+          npx eslint frontend/js/ --format json -o eslint-report.json || true
+          npx eslint frontend/js/ || true
+
+      - name: Upload ESLint report
+        uses: actions/upload-artifact@v4
+        with:
+          name: eslint-report
+          path: eslint-report.json
+
+  radon:
+    name: Radon — Code Complexity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Radon
+        run: pip install radon
+
+      - name: Cyclomatic Complexity
+        run: |
+          echo "=== Complexité cyclomatique ==="
+          radon cc backend/ -s -a || true
+
+      - name: Maintainability Index
+        run: |
+          echo "=== Indice de maintenabilité ==="
+          radon mi backend/ -s || true
+
+      - name: Raw metrics
+        run: |
+          echo "=== Métriques brutes ==="
+          radon raw backend/ -s || true
+
+      - name: Generate JSON report
+        run: |
+          radon cc backend/ -s -j > radon-report.json || true
+
+      - name: Upload Radon report
+        uses: actions/upload-artifact@v4
+        with:
+          name: radon-report
+          path: radon-report.json
